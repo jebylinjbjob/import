@@ -1,6 +1,6 @@
 # JBHRIS Import 專案
 
-這是一個用於連接 JBHRIS 系統的 Python 工具集，包含 API 登入功能和資料庫查詢功能。
+這是一個用於連接 JBHRIS 系統的 Python 工具集，包含 API 登入、員工資料匯入和資料庫查詢功能。
 
 ## 功能說明
 
@@ -10,8 +10,20 @@
 - 支援取得 access token 和 refresh token
 - 支援使用 refresh token 刷新 access token
 - 支援多租戶設定
+- 自動重試機制和錯誤處理
+- SSL 驗證處理（開發環境自動禁用）
 
-### 2. 資料庫查詢功能 (`query_user_table_sqlalchemy.py`)
+### 2. 員工資料匯入功能 (`import_user.py`)
+
+- 從 HireMe 系統匯入員工資料
+- 支援批次匯入多個使用者
+- 使用 JSON 格式請求（`{"LoginName": "xxx"}`）
+- 支援 Bearer Token 認證（可選）
+- 自動重試機制和錯誤處理
+- 完整的日誌記錄
+
+### 3. 資料庫查詢功能 (`query_user_table_sqlalchemy.py`)
+
 - 使用 SQLAlchemy 連接 SQL Server 資料庫
 - 查詢 user 表的資料
 - 顯示表結構資訊
@@ -19,11 +31,20 @@
 - 支援自訂 SQL 查詢
 - 與 pandas 完美整合
 
-### 4. Logging 功能 (`logger_config.py`)
+### 4. 主程式 (`main.py`)
+
+- 整合資料庫查詢和員工匯入功能
+- 批次處理所有員工資料匯入
+- 自動測試使用者登入功能
+- 使用 `tqdm` 顯示進度條
+- 完整的統計報告
+
+### 5. Logging 功能 (`logger_config.py`)
 
 - 統一的日誌記錄系統
 - 支援控制台和檔案輸出
 - 自動輪轉日誌檔案（防止檔案過大）
+- 日誌檔案名稱包含日期（格式：`YYYYMMDD`）
 - 可透過環境變數設定日誌級別
 
 ## 環境需求
@@ -86,12 +107,13 @@ DB_TRUST_SERVER_CERTIFICATE=true
 DB_MULTIPLE_ACTIVE_RESULT_SETS=true
 
 # API 設定
-API_BASE_URL=http://192.168.1.109:5050
-API_CLIENT_ID=your_client_id
+API_BASE_URL=https://localhost:7013
+API_CLIENT_ID=Public.JbJobMembership_Swagger
 API_CLIENT_SECRET=your_client_secret
 API_USERNAME=your_username
 API_PASSWORD=your_password
 API_TENANT=
+API_ACCESS_TOKEN=  # 可選，如果需要 Bearer Token 認證
 
 # Logging 設定（可選）
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -101,10 +123,12 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 ### 3. Logging 設定
 
-日誌檔案會自動儲存在 `logs/` 目錄下：
+日誌檔案會自動儲存在 `logs/` 目錄下，檔案名稱包含日期（格式：`模組名稱_YYYYMMDD.log`）：
 
-- `logs/query_user_table.log` - 資料庫查詢相關日誌
-- `logs/call_login_api.log` - API 呼叫相關日誌
+- `logs/main_YYYYMMDD.log` - 主程式相關日誌
+- `logs/import_user_YYYYMMDD.log` - 員工匯入相關日誌
+- `logs/call_login_api_YYYYMMDD.log` - API 登入相關日誌
+- `logs/query_user_table_sqlalchemy_YYYYMMDD.log` - 資料庫查詢相關日誌
 
 日誌級別可透過 `.env` 檔案中的 `LOG_LEVEL` 設定：
 
@@ -163,10 +187,51 @@ new_tokens = refresh_token(
 python query_user_table_sqlalchemy.py
 ```
 
-或執行主程式：
+### 員工資料匯入
+
+執行主程式進行批次匯入：
 
 ```bash
 python main.py
+```
+
+主程式會執行以下步驟：
+
+1. 連接資料庫並查詢所有使用者的 `LoginName`
+2. 檢查 API 狀態
+3. 批次匯入所有員工資料到系統
+4. 測試所有使用者的登入功能
+5. 顯示完整的統計報告
+
+**程式碼範例：**
+
+```python
+from import_user import import_user_from_hireme, import_users_batch
+
+# 匯入單個使用者
+result = import_user_from_hireme(
+    base_url="https://localhost:7013",
+    loginname="user@example.com",
+    access_token="",  # 可選，如果需要認證
+    tenant=None  # 可選
+)
+
+# 批次匯入多個使用者
+loginnames = ["user1@example.com", "user2@example.com"]
+results = import_users_batch(
+    base_url="https://localhost:7013",
+    loginnames=loginnames,
+    access_token="",
+    delay_between_requests=0.5
+)
+```
+
+### 查詢資料庫資料
+
+執行資料庫查詢腳本：
+
+```bash
+python query_user_table_sqlalchemy.py
 ```
 
 **程式碼範例：**
@@ -205,6 +270,7 @@ engine.dispose()
 ```
 
 **SQLAlchemy 的優勢：**
+
 - 連接池管理，提高效能
 - 更靈活的查詢方式
 - 更好的錯誤處理
@@ -213,32 +279,44 @@ engine.dispose()
 
 ## 專案結構
 
-```
+```text
 .
 ├── README.md                          # 專案說明文件
 ├── requirements.txt                   # Python 依賴套件清單
 ├── .env                               # 環境變數設定（不提交到版本控制）
 ├── .env.example                       # 環境變數範本
 ├── .gitignore                         # Git 忽略檔案設定
+├── .flake8                            # Flake8 程式碼檢查設定
 ├── logger_config.py                   # Logging 配置模組
 ├── call_login_api.py                  # API 登入功能
+├── import_user.py                     # 員工資料匯入功能
 ├── query_user_table_sqlalchemy.py    # 資料庫查詢功能 (SQLAlchemy)
-├── main.py                            # 主程式
+├── main.py                            # 主程式（整合匯入和測試功能）
+├── SHA_256.py                         # SHA256 密碼雜湊工具
+├── network_speedtest.py               # 網路速度測試工具
 ├── 默认模块.openapi.json              # OpenAPI 規範文件
+├── .github/
+│   └── workflows/
+│       └── python-package-conda.yml   # GitHub Actions CI/CD 設定
 └── logs/                              # 日誌檔案目錄（自動產生）
-    ├── query_user_table.log
-    ├── query_user_table_sqlalchemy.log
-    └── call_login_api.log
+    ├── main_YYYYMMDD.log
+    ├── import_user_YYYYMMDD.log
+    ├── call_login_api_YYYYMMDD.log
+    └── query_user_table_sqlalchemy_YYYYMMDD.log
 ```
 
 ## 依賴套件
 
 - `requests` - HTTP 請求庫
+- `urllib3` - HTTP 客戶端庫（用於重試機制）
 - `pyodbc` - SQL Server 資料庫連接（ODBC 驅動）
-- `sqlalchemy` - SQL 工具包和 ORM（可選，用於 SQLAlchemy 版本）
+- `sqlalchemy` - SQL 工具包和 ORM
 - `pandas` - 資料處理和分析
 - `openpyxl` - Excel 檔案讀寫
 - `python-dotenv` - 環境變數管理
+- `tqdm` - 進度條顯示
+- `speedtest-cli` - 網路速度測試（用於 network_speedtest.py）
+- `schedule` - 任務排程（用於 network_speedtest.py）
 
 ## 注意事項
 
@@ -306,6 +384,18 @@ logger.error("這是錯誤訊息", exc_info=True)  # exc_info=True 會包含堆�
 1. 檢查 `.env` 檔案中的 API 設定是否正確
 2. 確認 client_id、client_secret、username、password 是否正確
 3. 檢查 API 基礎 URL 是否可訪問
+4. 如果使用 Bearer Token，確認 `API_ACCESS_TOKEN` 是否正確設定
+
+### 員工匯入失敗
+
+**錯誤訊息：** `400 Bad Request` 或 `404 Not Found`
+
+**解決方法：**
+
+1. 確認 API 路徑是否正確（`/membership/api/app/users/import-from-hireme`）
+2. 檢查請求格式是否為 JSON：`{"LoginName": "xxx"}`
+3. 確認 `LoginName` 欄位名稱大小寫正確
+4. 檢查 API 服務是否正常運行
 
 ### 編碼問題
 
