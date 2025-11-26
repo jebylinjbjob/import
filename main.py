@@ -2,9 +2,9 @@ import os
 import time
 from tqdm import tqdm
 from dotenv import load_dotenv
-from call_login_api import login
-from call_login_api import check_api_status
+from call_login_api import check_api_status, login
 from logger_config import setup_logger
+from import_user import import_user_from_hireme
 from query_user_table_sqlalchemy import (
     create_database_engine,
     query_user_table_to_dataframe
@@ -16,149 +16,196 @@ load_dotenv()
 # 設定 logger
 logger = setup_logger("main")
 
-def main():
-    # 將User table 的LoginName 取出來
 
-    # 讀取.env 中的DB_SERVER, DB_DATABASE, DB_USER_ID, DB_PASSWORD
-    db_server = os.getenv("DB_SERVER")
-    db_database = os.getenv("DB_DATABASE")
-    db_user_id = os.getenv("DB_USER_ID")
-    db_password = os.getenv("DB_PASSWORD")
-    trust_server_certificate = os.getenv("DB_TRUST_SERVER_CERTIFICATE", "true").lower() == "true"
-    multiple_active_result_sets = os.getenv("DB_MULTIPLE_ACTIVE_RESULT_SETS", "true").lower() == "true"
-
-    engine = None
-    engine = create_database_engine(
-        server=db_server,
-        database=db_database,
-        user_id=db_user_id,
-        password=db_password,
-        trust_server_certificate=trust_server_certificate,
-        multiple_active_result_sets=multiple_active_result_sets
-    )
-
-    # 查詢 user 表資料
-    user_dataframe = query_user_table_to_dataframe(engine, table_name="user")
-    logger.info(user_dataframe)
-
-    # # 輸出所有 LoginName
-    # if "LoginName" in user_dataframe.columns:
-    #     logger.info("User table 的 LoginName 列表:")
-    #     for index, row in user_dataframe.iterrows():
-    #         login_name = row["LoginName"]
-    #         logger.info(f"LoginName: {login_name}")
-    # else:
-    #     logger.warning("user 表中沒有 LoginName 欄位")
-    #     logger.info(f"可用欄位: {list(user_dataframe.columns)}")
+def load_database_config():
+    """讀取資料庫設定"""
+    return {
+        "server": os.getenv("DB_SERVER"),
+        "database": os.getenv("DB_DATABASE"),
+        "user_id": os.getenv("DB_USER_ID"),
+        "password": os.getenv("DB_PASSWORD"),
+        "trust_server_certificate": os.getenv("DB_TRUST_SERVER_CERTIFICATE", "true").lower() == "true",
+        "multiple_active_result_sets": os.getenv("DB_MULTIPLE_ACTIVE_RESULT_SETS", "true").lower() == "true"
+    }
 
 
+def load_api_config():
+    """讀取 API 設定"""
+    return {
+        "base_url": os.getenv("API_BASE_URL", "https://localhost:7013").strip(),
+        "tenant": os.getenv("API_TENANT") or None,
+        "access_token": os.getenv("API_ACCESS_TOKEN", ""),
+        "client_id": os.getenv("API_CLIENT_ID"),
+        "client_secret": os.getenv("API_CLIENT_SECRET"),
+        "password": os.getenv("API_PASSWORD")
+    }
 
 
-
-
- # 先登入一個測試看看
-
-
-    response = check_api_status(base_url="https://localhost:7013")
-    if not response:
-        logger.error("API 狀態檢查失敗")
-        return None
-
-
-    response = login(
-        base_url="https://localhost:7013",
-        client_id="Public.JbJobMembership_Swagger",
-        client_secret="",
-        username="0985468598",
-        password="jebydev@6h4Lk6td4Jkj",
-    )
-    if not response:
-        logger.error("登入失敗")
-        return None
-    logger.info(response)
-
-    # 開始登入所有的使用者
-    # 確保 LoginName 欄位存在
-    if "LoginName" not in user_dataframe.columns:
-        logger.error("user 表中沒有 LoginName 欄位")
-        logger.info(f"可用欄位: {list(user_dataframe.columns)}")
-        return None
-
-    # 獲取所有 LoginName
-    login_names_list = user_dataframe["LoginName"].tolist()
-    total_users = len(login_names_list)
-
-    if total_users == 0:
-        logger.warning("沒有找到任何使用者")
-        return None
-
-    logger.info(f"開始處理 {total_users} 個使用者登入")
+def import_users(login_names_list, api_config, pbar, total_users):
+    """匯入員工資料"""
     success_count = 0
     fail_count = 0
 
-    # 使用 tqdm 顯示進度條
-    # 設定參數確保進度條完整顯示
-    with tqdm(
-        total=total_users,
-        desc="處理使用者登入",
-        unit="用戶",
-        ncols=120,
-        mininterval=0.05,  # 最小更新間隔（更頻繁更新）
-        miniters=1,  # 最小迭代次數
-        file=None,  # 輸出到 stdout
-        dynamic_ncols=True,  # 動態調整寬度
-        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}'  # 自訂格式
-    ) as pbar:
-        # 使用 enumerate 確保索引正確
-        for current_index, login_name in enumerate(login_names_list, start=1):
-            # 更新進度條描述（限制長度避免過長）
-            display_name = login_name[:15] + "..." if len(login_name) > 15 else login_name
-            pbar.set_description(f"處理: {display_name}")
+    for index, login_name in enumerate(login_names_list):
+        display_name = login_name[:15] + "..." if len(login_name) > 15 else login_name
+        pbar.set_description(f"匯入: {display_name}")
 
-            try:
-                response = login(
-                    base_url="https://localhost:7013",
-                    client_id="Public.JbJobMembership_Swagger",
-                    client_secret="",
-                    username=login_name,
-                    password="jebydev@6h4Lk6td4Jkj",
-                )
-                success_count += 1
-                # 使用 tqdm.write() 輸出日誌，避免干擾進度條
-                # 只在每 100 個或失敗時顯示，減少輸出
-                if current_index % 100 == 0 or current_index == total_users:
-                    tqdm.write(f"[{current_index}/{total_users}] ✓ {login_name} 登入成功")
-                logger.info(f"[{current_index}/{total_users}] 使用者 {login_name} 登入成功")
-                pbar.set_postfix({
-                    "成功": success_count,
-                    "失敗": fail_count,
-                    "成功率": f"{(success_count/current_index*100):.1f}%"
-                })
-            except Exception as e:
-                fail_count += 1
-                # 使用 tqdm.write() 輸出錯誤，避免干擾進度條
-                error_msg = str(e)[:80]  # 限制錯誤訊息長度
-                tqdm.write(f"[{current_index}/{total_users}] ✗ {login_name} 登入失敗: {error_msg}")
-                logger.error(f"[{current_index}/{total_users}] 使用者 {login_name} 登入失敗: {str(e)}")
-                pbar.set_postfix({
-                    "成功": success_count,
-                    "失敗": fail_count,
-                    "成功率": f"{(success_count/current_index*100):.1f}%"
-                })
-            finally:
-                # 更新進度條（確保每次迭代都更新）
-                pbar.update(1)
+        try:
+            result = import_user_from_hireme(
+                base_url=api_config["base_url"],
+                loginname=login_name,
+                access_token=api_config["access_token"],
+                tenant=api_config["tenant"]
+            )
+            success_count += 1
+            # 每100個成功或最後一個才輸出到控制台，避免刷屏
+            if (index + 1) % 100 == 0 or (index + 1) == total_users:
+                tqdm.write(f"[{index + 1}/{total_users}] ✓ {login_name} 匯入成功")
+            logger.info(f"[{index + 1}/{total_users}] 員工 {login_name} 匯入成功: {result}")
+        except Exception as e:
+            fail_count += 1
+            logger.error(f"[{index + 1}/{total_users}] 員工 {login_name} 匯入失敗: {str(e)}", exc_info=True)
+        finally:
+            pbar.set_postfix({
+                "成功": success_count,
+                "失敗": fail_count,
+                "成功率": f"{success_count / (index + 1) * 100:.2f}%" if (index + 1) > 0 else "0.00%"
+            })
+            pbar.update(1)
+            # 添加請求間隔，避免 API 過載
+            if index < total_users - 1:
+                time.sleep(0.5)
 
-                # 添加請求間隔，避免請求過於頻繁
-                if current_index < total_users:  # 最後一個不需要延遲
-                    time.sleep(0.5)  # 每次請求間隔0.5秒
+    return success_count, fail_count
 
-    # 處理完成後輸出最終統計
-    success_rate = (success_count / total_users * 100) if total_users > 0 else 0
-    final_msg = f"\n{'='*60}\n處理完成！\n總計: {total_users} 個使用者\n成功: {success_count} 個\n失敗: {fail_count} 個\n成功率: {success_rate:.2f}%\n{'='*60}"
-    print(final_msg)
-    logger.info(final_msg)
 
+def test_user_login(login_names_list, api_config):
+    """測試使用者登入"""
+    login_success = []
+    login_fail = []
+
+    tqdm.write("\n開始測試使用者登入...")
+    for login_name in login_names_list:
+        try:
+            result = login(
+                base_url=api_config["base_url"],
+                client_id=api_config["client_id"],
+                client_secret=api_config["client_secret"],
+                username=login_name,
+                password=api_config["password"],
+                tenant=api_config["tenant"]
+            )
+            if result and "access_token" in result:
+                login_success.append(login_name)
+            else:
+                login_fail.append(login_name)
+        except Exception as e:
+            login_fail.append(login_name)
+            logger.debug(f"使用者 {login_name} 登入測試失敗: {str(e)}")
+
+    return login_success, login_fail
+
+
+def main():
+    """主程式"""
+    engine = None
+    try:
+        # 讀取設定
+        db_config = load_database_config()
+        api_config = load_api_config()
+
+        # 連接資料庫
+        engine = create_database_engine(
+            server=db_config["server"],
+            database=db_config["database"],
+            user_id=db_config["user_id"],
+            password=db_config["password"],
+            trust_server_certificate=db_config["trust_server_certificate"],
+            multiple_active_result_sets=db_config["multiple_active_result_sets"]
+        )
+
+        # 查詢 user 表資料
+        user_dataframe = query_user_table_to_dataframe(engine, table_name="user")
+        logger.info(f"從資料庫獲取 {len(user_dataframe)} 筆使用者資料")
+
+        # 檢查 API 狀態
+        tqdm.write("正在檢查 API 狀態...")
+        api_status = check_api_status(base_url=api_config["base_url"])
+        if not api_status:
+            logger.error("API 狀態檢查失敗，請確認 API 服務是否運行且可訪問")
+            tqdm.write("API 狀態檢查失敗，請確認 API 服務是否運行且可訪問")
+            return
+
+        # 驗證 LoginName 欄位
+        if "LoginName" not in user_dataframe.columns:
+            logger.error("user 表中沒有 LoginName 欄位")
+            logger.info(f"可用欄位: {list(user_dataframe.columns)}")
+            return
+
+        # 獲取所有 LoginName
+        login_names_list = user_dataframe["LoginName"].tolist()
+        total_users = len(login_names_list)
+
+        if total_users == 0:
+            logger.warning("沒有找到任何使用者")
+            return
+
+        # 開始匯入員工資料
+        logger.info(f"開始匯入 {total_users} 個員工資料")
+        tqdm.write(f"\n{'='*60}")
+        tqdm.write(f"開始匯入 {total_users} 個員工資料...")
+        tqdm.write(f"{'='*60}\n")
+
+        with tqdm(
+            total=total_users,
+            desc="匯入員工資料",
+            unit="員工",
+            ncols=120,
+            mininterval=0.05,
+            miniters=1,
+            file=None,
+            dynamic_ncols=True,
+            bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}'
+        ) as pbar:
+            success_count, fail_count = import_users(login_names_list, api_config, pbar, total_users)
+
+        # 測試使用者登入
+        login_success, login_fail = test_user_login(login_names_list, api_config)
+
+        # 輸出登入測試結果
+        tqdm.write("\n" + "="*60)
+        tqdm.write("登入測試完成：")
+        tqdm.write(f"成功 ({len(login_success)}): {login_success[:10]}{'...' if len(login_success) > 10 else ''}")
+        tqdm.write(f"失敗 ({len(login_fail)}): {login_fail[:10]}{'...' if len(login_fail) > 10 else ''}")
+        tqdm.write("="*60)
+
+        # 輸出最終統計
+        final_success_rate = (success_count / total_users * 100) if total_users > 0 else 0.0
+        final_msg = (
+            f"\n{'='*60}\n"
+            f"匯入完成！\n"
+            f"總計: {total_users} 個員工\n"
+            f"成功: {success_count} 個\n"
+            f"失敗: {fail_count} 個\n"
+            f"成功率: {final_success_rate:.2f}%\n"
+            f"{'='*60}"
+        )
+        tqdm.write(final_msg)
+        logger.info(final_msg)
+
+    except Exception as e:
+        logger.error(f"主程式發生錯誤: {e}", exc_info=True)
+        tqdm.write(f"\n主程式發生錯誤: {e}")
+    finally:
+        # 關閉資料庫引擎
+        if engine:
+            engine.dispose()
+            logger.info("資料庫引擎已關閉")
+            tqdm.write("資料庫引擎已關閉")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"主程式發生錯誤: {e}", exc_info=True)
+        print(f"\n主程式發生錯誤: {e}")
