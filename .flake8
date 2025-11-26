@@ -1,0 +1,20 @@
+[flake8]
+max-line-length = 120
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .env,
+    logs,
+    *.pyc,
+    .github
+ignore =
+    E203,  # whitespace before ':'
+    E266,  # too many leading '#' for block comment
+    E501,  # line too long (handled by black)
+    W503,  # line break before binary operator
+    F401,  # imported but unused (may be used in __main__)
+max-complexity = 10
+
