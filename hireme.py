@@ -8,7 +8,7 @@ import re
 import csv
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, List, Tuple
-from sqlalchemy import create_engine, Column, String, DateTime, func, and_, or_, select, Table as SQLTable
+from sqlalchemy import create_engine, Column, String, DateTime, Integer, func, and_, or_, select, Table as SQLTable
 from sqlalchemy.orm import declarative_base, sessionmaker, aliased
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
@@ -48,6 +48,8 @@ class UserResumeTempStatus(Base):
 
     userId = Column(String, primary_key=True)
     backId = Column(String)
+    hasExport = Column(Integer)
+    hasFin = Column(Integer)
 
 
 # 定義 REC_User 模型（跨資料庫，使用 Table 物件來處理）
@@ -181,6 +183,70 @@ def query_registered_users(engine: Engine) -> List[Dict]:
         return []
 
 
+def query_exported_finished_users(engine: Engine) -> List[Dict]:
+    """
+    查詢已匯出且已完成的用戶資料（hasExport = 1 and hasFin = 1）
+
+    Args:
+        engine: 資料庫引擎
+
+    Returns:
+        用戶資料列表
+    """
+    try:
+        # 建立 Session
+        SessionLocal = sessionmaker(bind=engine)
+        session = SessionLocal()
+
+        try:
+            from sqlalchemy import text
+
+            sql_query = text("""
+                SELECT
+                    u.Id,
+                    u.LoginName,
+                    ru.CreateDate,
+                    ru.NameC
+                FROM HireMePlz.dbo.[User] u
+                LEFT JOIN HireMePlz.dbo.userResumeTempStatus urts ON u.Id = urts.userId
+                LEFT JOIN JBHRIS_DISPATCH.dbo.REC_User ru ON ru.UserID = urts.backId
+                WHERE ru.CreateDate BETWEEN :start_date AND :end_date
+                AND u.lineUid IS NOT NULL
+                AND urts.hasExport = 1
+                AND urts.hasFin = 1
+            """)
+
+            # 執行查詢
+            start_date, end_date = get_total_date_range()
+            result = session.execute(
+                sql_query,
+                {"start_date": start_date, "end_date": end_date}
+            )
+            results = result.fetchall()
+
+            users = []
+            for row in results:
+                login_name = row.LoginName if row.LoginName else ""
+                # 只保留 email 格式的 LoginName
+                if is_email_format(login_name):
+                    users.append({
+                        'Id': row.Id,
+                        'LoginName': login_name,
+                        'CreateDate': row.CreateDate,
+                        'NameC': row.NameC if row.NameC else ''
+                    })
+
+            logger.info(f"查詢到 {len(users)} 位已匯出且已完成的用戶（email 格式）")
+            return users
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.error(f"查詢已匯出且已完成的用戶失敗: {e}", exc_info=True)
+        return []
+
+
 def count_users_by_week(users: List[Dict], week_start: date, week_end: date) -> int:
     """
     統計指定週的註冊人數
@@ -261,6 +327,58 @@ def generate_csv_report(users: List[Dict], output_file: str = "hireme_registrati
         logger.error(f"產生 CSV 報告失敗: {e}", exc_info=True)
 
 
+def generate_exported_finished_csv_report(users: List[Dict], output_file: str = "hireme_exported_finished_report.csv"):
+    """
+    產生已匯出且已完成的用戶 CSV 報告
+
+    Args:
+        users: 用戶列表
+        output_file: 輸出檔案名稱
+    """
+    try:
+        # 計算總人數
+        total_count = len(users)
+
+        # 取得各週的統計
+        weeks = get_week_ranges()
+        week_counts = []
+        for week_desc, week_start, week_end, week_label in weeks:
+            count = count_users_by_week(users, week_start, week_end)
+            week_counts.append({
+                'period': week_desc,
+                'count': count
+            })
+
+        # 寫入 CSV
+        with open(output_file, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+
+            # 寫入標題
+            writer.writerow(['期間', '已匯出且已完成人數'])
+
+            # 寫入總人數
+            writer.writerow([f'總人數（11/17~1/11）', total_count])
+
+            # 寫入各週統計
+            for week_data in week_counts:
+                writer.writerow([week_data['period'], week_data['count']])
+
+        logger.info(f"已匯出且已完成用戶 CSV 報告已產生: {output_file}")
+
+        # 輸出到控制台
+        print(f"\n{'='*60}")
+        print("HireMe 已匯出且已完成用戶統計報告")
+        print(f"{'='*60}")
+        print(f"總人數（11/17~1/11）：{total_count:,}")
+        for week_data in week_counts:
+            print(f"{week_data['period']}：{week_data['count']:,}")
+        print(f"{'='*60}\n")
+        print(f"報告已儲存至: {output_file}\n")
+
+    except Exception as e:
+        logger.error(f"產生已匯出且已完成用戶 CSV 報告失敗: {e}", exc_info=True)
+
+
 def main():
     """
     主函數
@@ -280,10 +398,19 @@ def main():
         if not users:
             logger.warning("未查詢到任何註冊用戶")
             print("\n未查詢到任何註冊用戶（email 格式）\n")
-            return
+        else:
+            # 產生 CSV 報告
+            generate_csv_report(users)
 
-        # 產生 CSV 報告
-        generate_csv_report(users)
+        # 查詢已匯出且已完成的用戶
+        exported_finished_users = query_exported_finished_users(engine)
+
+        if not exported_finished_users:
+            logger.warning("未查詢到任何已匯出且已完成的用戶")
+            print("\n未查詢到任何已匯出且已完成的用戶（email 格式）\n")
+        else:
+            # 產生已匯出且已完成的用戶 CSV 報告
+            generate_exported_finished_csv_report(exported_finished_users)
 
     finally:
         # 關閉資料庫引擎
