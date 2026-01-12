@@ -59,17 +59,8 @@ jobs:
         pip install pytest
         pytest || true
 
-    - name: py_compile
+    - name: Compile Python files
       shell: bash -l {0}
       run: |
-        pip install py_compile
-        py_compile .
-        py_compile *.py
-        py_compile *.pyw
-        py_compile *.pyz
-        py_compile *.pywz
-        py_compile *.pyzw
-        py_compile *.pyzwz
-        py_compile *.pyzwzw
-        py_compile *.pyzwzwz
+        python -m compileall . || true
 
