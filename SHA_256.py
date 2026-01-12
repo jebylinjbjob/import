@@ -31,8 +31,8 @@ def password_hash(value: str, unique_value: str, salt: Optional[str] = "moremore
 
 if __name__ == "__main__":
     # 測試範例
-    test_value = "jebylin"
-    test_unique_value = "7c3257b9adf0462aa3072bf0e75f3675"
+    test_value = "123456"
+    test_unique_value = "3a33c354cdfa48f79cd3b00f413fc99f"
 
     hashed = password_hash(test_value, test_unique_value)
     print(f"原始值: {test_value}")
