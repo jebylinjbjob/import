@@ -10,21 +10,12 @@ __pycache__/
 env/
 venv/
 .venv/
-ENV/
-build/
-dist/
-*.egg-info/
 
 # IDE
 .vscode/
-.idea/
-*.swp
-*.swo
 
 # 資料檔案
 *.csv
-*.xlsx
-*.xls
 
 # 日誌檔案
 logs/
