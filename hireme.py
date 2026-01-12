@@ -13,6 +13,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, aliased
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
 import logging
+from week_range import get_week_ranges, get_total_date_range
 
 # 載入 .env 檔案
 load_dotenv()
@@ -113,24 +114,6 @@ def is_email_format(login_name: str) -> bool:
     return bool(re.match(email_pattern, login_name))
 
 
-def get_week_ranges() -> List[Tuple[str, date, date, str]]:
-    """
-    定義週的日期範圍
-
-    Returns:
-        週的列表，每個元素包含 (描述, 開始日期, 結束日期, 週標籤)
-    """
-    weeks = [
-        ("2025/11月（第3週 11/17~11/23）", date(2025, 11, 17), date(2025, 11, 23), "2025-11-第3週"),
-        ("2025/11月（第4週 11/24~11/30）", date(2025, 11, 24), date(2025, 11, 30), "2025-11-第4週"),
-        ("2025/12月（第1週 12/1~12/7）", date(2025, 12, 1), date(2025, 12, 7), "2025-12-第1週"),
-        ("2025/12月（第2週 12/8~12/14）", date(2025, 12, 8), date(2025, 12, 14), "2025-12-第2週"),
-        ("2025/12月（第3週 12/15~12/21）", date(2025, 12, 15), date(2025, 12, 21), "2025-12-第3週"),
-        ("2025/12月（第4週 12/22~12/28）", date(2025, 12, 22), date(2025, 12, 28), "2025-12-第4週"),
-        ("2026/01月（第1週 12/29~1/4）", date(2025, 12, 29), date(2026, 1, 4), "2026-01-第1週"),
-        ("2026/01月（第2週 1/5~1/11）", date(2026, 1, 5), date(2026, 1, 11), "2026-01-第2週"),
-    ]
-    return weeks
 
 
 def query_registered_users(engine: Engine) -> List[Dict]:
@@ -168,9 +151,10 @@ def query_registered_users(engine: Engine) -> List[Dict]:
             """)
 
             # 執行查詢
+            start_date, end_date = get_total_date_range()
             result = session.execute(
                 sql_query,
-                {"start_date": date(2025, 11, 17), "end_date": date(2026, 1, 11)}
+                {"start_date": start_date, "end_date": end_date}
             )
             results = result.fetchall()
 
