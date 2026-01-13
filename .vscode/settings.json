@@ -1,10 +1,5 @@
 {
   "github.copilot.chat.localeOverride": "zh-TW",
-  "github.copilot.chat.codeGeneration.instructions": [
-    {
-      "text": "Always response in #zh-tw."
-    }
-  ],
   "github.copilot.chat.commitMessageGeneration.instructions": [
     {
       "text": "請一律使用正體中文來撰寫記錄"
@@ -14,6 +9,29 @@
   "git.enableSmartCommit": true,
   "git.confirmSync": false,
   "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[python]": {
+    "editor.formatOnSave": true
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "prettier.singleQuote": false,
+  "prettier.semi": true,
+  "prettier.trailingComma": "es5",
+  "prettier.printWidth": 120,
   "files.autoSave": "afterDelay",
   "files.autoSaveDelay": 1000,
   "files.encoding": "utf8"
