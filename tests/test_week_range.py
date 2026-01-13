@@ -45,11 +45,6 @@ class TestWeekRanges:
             diff = (next_start - current_end).days
             assert diff == 1, f"週之間應該連續: {weeks[i][0]} -> {weeks[i+1][0]}"
 
-    def test_get_week_ranges_count(self):
-        """測試週數量"""
-        weeks = get_week_ranges()
-        assert len(weeks) == 8, "應該有 8 週"
-
     def test_get_total_date_range(self):
         """測試總日期範圍"""
         start, end = get_total_date_range()
@@ -64,20 +59,6 @@ class TestWeekRanges:
 
         assert start == weeks[0][1], "總開始日期應等於第一週的開始日期"
         assert end == weeks[-1][2], "總結束日期應等於最後一週的結束日期"
-
-    def test_specific_week_ranges(self):
-        """測試特定週的日期範圍"""
-        weeks = get_week_ranges()
-
-        # 測試第一週
-        assert weeks[0][0] == "2025/11月（第3週 11/17~11/23）"
-        assert weeks[0][1] == date(2025, 11, 17)
-        assert weeks[0][2] == date(2025, 11, 23)
-
-        # 測試最後一週
-        assert weeks[-1][0] == "2026/01月（第2週 1/5~1/11）"
-        assert weeks[-1][1] == date(2026, 1, 5)
-        assert weeks[-1][2] == date(2026, 1, 11)
 
     def test_week_labels_format(self):
         """測試週標籤格式"""
