@@ -42,6 +42,19 @@ all:
     @just login
 
 
+# 執行測試
+test:
+    @Write-Host "執行單元測試..."
+    @if (Get-Command uv -ErrorAction SilentlyContinue) { uv run pytest tests/ -v } else { python -m pytest tests/ -v }
+
+
+# 執行測試並顯示覆蓋率
+test-cov:
+    @Write-Host "執行測試並顯示覆蓋率..."
+    @if (Get-Command uv -ErrorAction SilentlyContinue) { uv pip install pytest-cov; uv run pytest tests/ --cov=. --cov-report=term-missing --cov-report=html } else { pip install pytest-cov; python -m pytest tests/ --cov=. --cov-report=term-missing --cov-report=html }
+    @Write-Host "覆蓋率報告已產生於 htmlcov/index.html"
+
+
 # 更新依賴套件
 update:
     @Write-Host "更新依賴套件..."
