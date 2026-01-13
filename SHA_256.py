@@ -27,14 +27,13 @@ def password_hash(value: str, unique_value: str, salt: Optional[str] = "moremore
     result = hash_obj.hexdigest()
 
     return result
+    
+# if __name__ == "__main__":
+#     # 測試範例
+#     test_value = "123456"
+#     test_unique_value = "3a33c354cdfa48f79cd3b00f413fc99f"
 
-
-if __name__ == "__main__":
-    # 測試範例
-    test_value = "123456"
-    test_unique_value = "3a33c354cdfa48f79cd3b00f413fc99f"
-
-    hashed = password_hash(test_value, test_unique_value)
-    print(f"原始值: {test_value}")
-    print(f"唯一值: {test_unique_value}")
-    print(f"SHA256 雜湊結果: {hashed}")
+#     hashed = password_hash(test_value, test_unique_value)
+#     print(f"原始值: {test_value}")
+#     print(f"唯一值: {test_unique_value}")
+#     print(f"SHA256 雜湊結果: {hashed}")
