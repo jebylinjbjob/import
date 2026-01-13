@@ -48,6 +48,12 @@ test:
     @if (Get-Command uv -ErrorAction SilentlyContinue) { uv run pytest tests/ -v } else { python -m pytest tests/ -v }
 
 
+# 程式碼檢查
+lint:
+    @Write-Host "執行程式碼檢查..."
+    @if (Get-Command uv -ErrorAction SilentlyContinue) { uv pip install flake8; uv run flake8 . --count --show-source --statistics } else { pip install flake8; flake8 . --count --show-source --statistics }
+
+
 # 執行測試並顯示覆蓋率
 test-cov:
     @Write-Host "執行測試並顯示覆蓋率..."

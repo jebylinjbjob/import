@@ -1,0 +1,22 @@
+[flake8]
+# 最大行長度
+max-line-length = 120
+
+# 排除的檔案和資料夾
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .pytest_cache,
+    htmlcov,
+    logs
+
+# 忽略的錯誤代碼
+ignore =
+    E203,  # 切片前的空白
+    W503,  # 二元運算子前換行
+    E501   # 行長度超過限制（由 max-line-length 控制）
+
+# 每個檔案的最大複雜度
+max-complexity = 10
