@@ -1,23 +1,5 @@
-# 環境變數檔案
 .env
-
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-.venv/
-
-# IDE
-.vscode/
-
-# 資料檔案
 *.csv
-
-# 日誌檔案
 logs/
 *.log
-
